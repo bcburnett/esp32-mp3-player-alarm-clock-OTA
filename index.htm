@@ -1,0 +1,1102 @@
+<style>
+:root {
+  --select-border: #777;
+  --select-focus: blue;
+  --select-arrow: var(--select-border);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+  body {
+    background-color: antiquewhite;
+    font-family: Arial, Helvetica, sans-serif;
+    text-align: center;
+    background-color: aqua;
+  }
+
+  .title {
+    font-family: Arial, Helvetica, sans-serif;
+    text-align: center;
+    background-color: aqua;
+    color: black;
+    margin:0%;
+  }
+
+  button {
+    border: 2px, solid, white;
+    border-radius: 50%;
+    background: rgb(113, 114, 156);
+    background: radial-gradient(circle, rgba(113, 114, 156, 1) 0%, rgba(5, 29, 115, 1) 100%);
+    color: aliceblue;
+    width: 75px;
+    height: 75px;
+  }
+
+::-webkit-scrollbar {
+  width: 20px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: blue;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: aqua;
+  border-radius: 20px;
+}
+
+  select {
+  appearance: none;
+  background-color: transparent;
+  border: none;
+  padding: 0 1em 0 0;
+  margin: 0;
+  width: 100%;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: inherit;
+  line-height: inherit;
+  outline: none;
+  color:aliceblue;
+}
+
+option {
+  background-color: blue;
+  color: aliceblue;
+}
+
+  Button:hover {
+    opacity: 50%;
+  }
+
+  .keypad {
+    text-align: center;
+    border-radius: 5px;
+    border-width: 2px;
+    background-color: blue;
+    width: fit-content;
+    margin: auto;
+    color: aliceblue;
+    margin-top: 0px;
+    padding-top: 5px;
+  }
+</style>
+<!-- html page -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mp3 Alarm Clock</title>
+</head>
+
+<body>
+  <h3 class="title">MP3 Player / Alarm Clock <span id="time"></span></h3>
+      <div class="keypad">
+    <h4><span id="play">STOPPED</span> Current Track: <span id="track">0</span></h4>
+    <hr />
+    <br />
+    <button id="Prev" onclick="sendMessage('prev')">prev</button>
+    <button id="Play" onclick="sendMessage('play')">play</button>
+    <button id="Stop" onclick="sendMessage('stop')">stop</button>
+    <button id="Next" onclick="sendMessage('next')">next</button>
+    <br /><br />
+    <select id="playList" onchange="sendMessage('song'+this.value);">
+      <option>Choose a 60's song</option>
+    </select>
+    <br />
+    <select id="boc" onchange="sendMessage('boc'+this.value);">
+      <option>Choose a boc song</option>
+    </select>
+    <br />
+    <select id="ure" onchange="sendMessage('ure'+this.value);">
+      <option>Choose a Midge Ure song</option>
+    </select>
+    <br /><br />
+    <hr />
+    <h4>Play Mode:<span id="mode">STOPPED</span> <span id="eq">NONE</span></h4>
+    <hr />
+    <button id="shuf" onclick="sendMessage('shuf')">shuffle</button>
+    <button id="loop" onclick="sendMessage('loop')">loop</button>
+    <button id="eq" onclick="sendMessage('eq')">eq</button>
+    <br />
+    <hr />
+    <h4>Volume:<span id="volume">10</span></h4>
+    <hr />
+    <button id="down" onclick="sendMessage('down')">down</button>
+    <button id="up" onclick="sendMessage('up')">up</button>
+    <br /><br />
+    <input type="range" name="volume" id="slide" min="0" max="30" value="5" onclick="sendMessage('vol,'+this.value)" />
+    <br /><br />
+    <hr />
+    <h4>Alarm Time: <span id="alarmStatus">OFF</span></h4>
+    <hr />
+    <input type="time" id="alarm" name="alarm" min="00:00" max="23:59">
+    <br /><br />
+    <button id="set"
+      onclick="sendMessage(document.getElementById('alarm').value? 'alarm,'+document.getElementById('alarm').value : '')">set</button>
+    <button id="reset" onclick="sendMessage('alarm,-1:-1')">reset</button>
+    <br />
+    <hr />
+    <input type='file' name='upload' id='upload' value=''><span id="percent"></span>
+    <br>
+  </div>
+  <!-- javascript -->
+  <script>
+
+    var gateway = `ws://${window.location.hostname}/ws`;
+    var websocket;
+    const mode = ["Loop", "Folder Repeat", "Single Repeat", "Shuffle", "Normal"];
+    var state = {};
+    var boc = [];
+    var ure = [];
+    var songList = [];
+    var json = {};
+
+    window.addEventListener('load', onLoad);
+
+    function initWebSocket() {
+      console.log('Trying to open a WebSocket connection...');
+      websocket = new WebSocket(gateway);
+      websocket.onopen = onOpen;
+      websocket.onclose = onClose;
+      websocket.onmessage = onMessage; 
+    }
+    function onOpen(event) {
+      console.log('Connection opened');
+    }
+
+    function onClose(event) {
+      console.log('Connection closed');
+      setTimeout(initWebSocket, 2000);
+    }
+
+    function onMessage(event) {
+      json = JSON.parse(event.data);
+      console.log(json);
+
+      if (state.playState != json.playState) {
+        state.playState = json.playState;
+        document.getElementById('play').innerHTML = json.playState;
+      }
+
+      if (state.track != json.track) {
+        state.track = json.track;
+
+        if (json.track < 144) state.title = boc[json.track - 2]
+
+        if (json.track < 330 && json.track > 143) state.title = ure[json.track - 144]
+
+        if (json.track > 329) state.title = songList[json.track - 330]
+
+        document.getElementById('track').innerHTML = json.track + "<br />" + state.title;
+      }
+
+      if (state.volume != json.volume) {
+        state.volume = json.volume;
+        document.getElementById('volume').innerHTML = json.volume;
+        document.getElementById('slide').value = json.volume;
+      }
+
+      if (state.playMode != json.playMode) {
+        state.playMode = json.playMode;
+        document.getElementById('mode').innerHTML = mode[json.playMode];
+      }
+
+      document.getElementById('alarmStatus').innerHTML = (json.hour == -1 ? "Not" : String(json.hour).padStart(2, '0')) + ':' + (json.minute == -1 ? "Set" : String(json.minute).padStart(2, '0'));
+    }
+
+    function onLoad(event) {
+      initWebSocket();
+
+      setPlaylist();
+      var select = document.getElementById("playList");
+      songList.forEach((v) => {
+        var el = document.createElement("option");
+        el.textContent = el.value = v;
+        select.appendChild(el);
+      })
+
+      setBoc();
+      select = document.getElementById("boc");
+      boc.forEach((v) => {
+        var el = document.createElement("option");
+        el.textContent = el.value = v;
+        select.appendChild(el);
+      })
+
+      setUre();
+      select = document.getElementById("ure");
+      ure.forEach((v) => {
+        var el = document.createElement("option");
+        el.textContent = el.value = v;
+        select.appendChild(el);
+      })
+      document.getElementById("upload").addEventListener("change", (e) => processFile(e));
+    }
+
+    function processFile(e) {
+      const reader = new FileReader();
+      reader.readAsText(e.path[0].files[0]);
+      var myfilename = e.path[0].files[0].name;
+
+      reader.onload = (e) => {
+        var myfile = e.target.result;
+        var myarray = myfile.split('');
+        var mylength = myfile.length;
+        i = 0;
+        k = 1;
+        var sendArray = [];
+        sendArray[0] = ("upld:" + myfilename);
+
+        function getChunk() {
+          var sendstring = '';
+          for (var j = 0; j < 512; j++) {
+            if (i < mylength) {
+              sendstring += myarray[i];
+            }
+            i++
+          }
+          return sendstring;
+        }
+
+        function loopThroughSplittedText(splittedText) {
+          splittedText.forEach(function (text, i) {
+            setTimeout(function () {
+              sendMessage(text, i);
+            }, i * 500)
+          })
+        }
+
+        while (i < mylength) {
+
+          sendArray[k] = ("file:" + getChunk());
+          k++;
+        }
+        sendArray[k] = ("comp");
+        sendstring = '';
+        loopThroughSplittedText(sendArray);
+      };
+    }
+
+    function sendMessage(data, index) {
+      if (index) var percent = index / k * 100;
+      if (data.substring(0, 4) == 'file') document.getElementById('percent').innerHTML = percent + ' %';
+      if (data.substring(0, 4) == 'comp') {
+        document.getElementById('percent').innerHTML = "completed";
+        setTimeout(() => {
+          location.reload();
+        }, 2000);
+      }
+      websocket.send(data);
+    }
+
+    function setUre() {
+      ure = ["001After A Fashion.mp3",
+        "002After a Fashion (Recorded Live at Wembley Arena,23 Dec 1985).mp3",
+        "003Alfie.mp3",
+        "004All Fall Down (Live) (2010 Digital Remaster).mp3",
+        "005All For Love.mp3",
+        "006All Stood Still.mp3",
+        "007Answers To Nothing (2010 Digital Remaster).mp3",
+        "008Answers To Nothing (Extended Version) (2010 Digital Remaster).mp3",
+        "009Answers To Nothing.mp3",
+        "010Answers To Nothing (Work In Progress Mix).mp3",
+        "011Antilles.mp3",
+        "012Band Aid - Do They Know It's Christmas-.mp3",
+        "013Beneath A Spielberg Sky.mp3",
+        "014Breathe (Live).mp3",
+        "015Breathe.mp3",
+        "016Call Of The Wild (Extended Version).mp3",
+        "017Call Of The Wild.mp3",
+        "018Celtic Rising.mp3",
+        "019Cold, Cold Heart (Live).mp3",
+        "020Cold, Cold Heart.mp3",
+        "021Crash.mp3",
+        "022Cry.mp3",
+        "023Dancing With Tears In My Eyes.mp3",
+        "024Day After Day.mp3",
+        "025Dear God (2010 Digital Remaster).mp3",
+        "026Dear God (Extended Version) (2010 Digital Remaster).mp3",
+        "027Dear God (Live) (2010 Digital Remaster).mp3",
+        "028Dear God (Live).mp3",
+        "029Dear God.mp3",
+        "030dge_ure-absolution_sometime.mp3",
+        "031dge_ure-alone_(live_2000_munich).mp3",
+        "032dge_ure-alone.mp3",
+        "033dge_ure-alone_(new_radio_edit_2006).mp3",
+        "034dge_ure-alone_(un-plugged_radio_session).mp3",
+        "035dge_ure-beneath_a_spielberg_sky_(2006_radio_edit).mp3",
+        "036dge_ure-beneath_a_spielberg_sky_(acoustic_live).mp3",
+        "037dge_ure-beneath_a_spielberg_sky_(live_2000_munich).mp3",
+        "038dge_ure-beneath_a_spielberg_sky.mp3",
+        "039dge_ure-fall_(previous_un-released).mp3",
+        "040dge_ure-four.mp3",
+        "041dge_ure-higher.mp3",
+        "042dge_ure-let_me_go_(live_2000).mp3",
+        "043dge_ure-let_me_go.mp3",
+        "044dge_ure-let_me_go_(un-plugged_radio_session).mp3",
+        "045dge_ure-monster_(live_2000).mp3",
+        "046dge_ure-monster.mp3",
+        "047dge_ure-somebody.mp3",
+        "048dge_ure-strong_(live_2000_munich).mp3",
+        "049dge_ure-strong.mp3",
+        "050dge_ure-the_refugee_song_(live_2000).mp3",
+        "051dge_ure-the_refugee_song.mp3",
+        "052dge_ure-words.mp3",
+        "053dge_ure-you_move_me_(acoustic_radio_mix).mp3",
+        "054dge_ure-you_move_me_(live_2000).mp3",
+        "055dge_ure-you_move_me.mp3",
+        "056dge_ure-you_move_me_(un-released_radio_edit_2000).mp3",
+        "057Edo.mp3",
+        "058Fade To Grey (Recorded Live In Rehearsal,27 Sep 1985)).mp3",
+        "059Fallen Angel.mp3",
+        "060Feel So Good.mp3",
+        "061Fields Of Fire.mp3",
+        "062Flowers.mp3",
+        "063Free.mp3",
+        "064Get A Life.mp3",
+        "065Gift.mp3",
+        "066Goodbye To Love.mp3",
+        "067Guns And Arrows.mp3",
+        "068Hands Around My Heart.mp3",
+        "069Heart.mp3",
+        "070Hell To Heaven (2010 Digital Remaster).mp3",
+        "071Hell To Heaven.mp3",
+        "072Homeland (2010 Digital Remaster).mp3",
+        "073Homeland.mp3",
+        "074Honorare (2010 Digital Remaster).mp3",
+        "075Hymn.mp3",
+        "076If I Was (Extended Mix).mp3",
+        "077If I Was.mp3",
+        "078I See Hope In The Morning Light.mp3",
+        "079I See Hope In The Morning Light (Rik Walton Remix).mp3",
+        "080Just For You (2010 Digital Remaster).mp3",
+        "081Just For You (Live) (2010 Digital Remaster).mp3",
+        "082Just For You (Live).mp3",
+        "083Just For Your.mp3",
+        "084Just For You (Work In Progress Mix).mp3",
+        "085Lady Stardust.mp3",
+        "086Lament.mp3",
+        "087Lay My Body Down.mp3",
+        "088Let It Go-.mp3",
+        "089Let The Heartaches Begin.mp3",
+        "090Lied (2010 Digital Remaster).mp3",
+        "091Lied.mp3",
+        "092Light In Your Eyes.mp3",
+        "093Little One.mp3",
+        "094Live Forever.mp3",
+        "095Living In The past.mp3",
+        "096Living In The Past.mp3",
+        "097Love's Great Adventure.mp3",
+        "098Love You Gave.mp3",
+        "099Madame De Sade.mp3",
+        "100Man Of The World (Live).mp3",
+        "101Man Of The World.mp3",
+        "102May Your Good Lord.mp3",
+        "103Midge Ure - After A Fashion.mp3",
+        "104Midge Ure - Answers To Nothing.mp3",
+        "105Midge Ure - Call Of The Wild.mp3",
+        "106Midge Ure - Cold, Cold Heart.mp3",
+        "107Midge Ure - Dear God.mp3",
+        "108Midge Ure - If I Was.mp3",
+        "109Midge Ure - No Regrets.mp3",
+        "110Midge Ure - That Certain Smile.mp3",
+        "111Mood Music [Bonus Track].mp3",
+        "112Mood Music.mp3",
+        "113Music #1 (2010 Digital Remaster).mp3",
+        "114Music #2.mp3",
+        "115My Minds Eye.mp3",
+        "116Nevermore.mp3",
+        "117No Regrets (Live).mp3",
+        "118No Regrets.mp3",
+        "119Oboe (2010 Digital Remaster).mp3",
+        "120One Small Day.mp3",
+        "121Personal Heaven.mp3",
+        "122Phil Lynott - Yellow Pearl.mp3",
+        "123Piano [Bonus Track].mp3",
+        "124Piano.mp3",
+        "125Pure Love.mp3",
+        "126Reap The Wild Wind.mp3",
+        "127Remembrance Day (2010 Digital Remaster).mp3",
+        "128Remembrance Day.mp3",
+        "129Rising.mp3",
+        "130She Cried.mp3",
+        "131Sinnerman.mp3",
+        "132Sister And Brother (2010 Digital Remaster).mp3",
+        "133Sister And Brother (Alternate Single Edit) (2010 Digital Remaster).mp3",
+        "134Sister And Brother.mp3",
+        "135Sister And Brother (Work In Progress Mix) (No Vocals).mp3",
+        "136Sister And Brother (Work In Progress Mix) (With Vocals).mp3",
+        "137Sleepwalk.mp3",
+        "138Song For While I'm Away.mp3",
+        "139Strange Brew (Live) (2010 Digital Remaster).mp3",
+        "140Supernatural.mp3",
+        "141Sweet 'N Sensitive Thing.mp3",
+        "142Take Me Home (2010 Digital Remaster).mp3",
+        "143Take Me Home.mp3",
+        "144Textures.mp3",
+        "145That Certain Smile (Extended Version).mp3",
+        "146That Certain Smile.mp3",
+        "147That Certain Smile (Recorded Live at Wembley Arena,23 Dec 1985).mp3",
+        "148The Chieftain.mp3",
+        "149The Chieftain-The Dancer (Recorded Live at Wembley Arena,23 Dec 1985).mp3",
+        "150The Gift (Instrumental) [Bonus Track].mp3",
+        "151The Gift (Instrumental).mp3",
+        "152The Gift.mp3",
+        "153The Gift (Recorded Live at Wembley Arena,23 Dec 1985).mp3",
+        "154The Gift (Reprise).mp3",
+        "155The Leaving (So Long) (2010 Digital Remaster).mp3",
+        "156The Leaving (So Long).mp3",
+        "157The Maker.mp3",
+        "158The Man I Used To Be.mp3",
+        "159The Man Who Sold The World [Bonus Track].mp3",
+        "160The Man Who Sold The World.mp3",
+        "161The Thin Wall.mp3",
+        "162The Voice.mp3",
+        "163Tor.mp3",
+        "164To Sir With Love.mp3",
+        "165Trail Of Tears (Live).mp3",
+        "166Trail Of Tears.mp3",
+        "167Trying Now.mp3",
+        "168Tumbling Down.mp3",
+        "169Ultravox - All Fall Down.mp3",
+        "170Ultravox - Dancing With Tears In My Eyes.mp3",
+        "171Ultravox - Love's Great Adventure.mp3",
+        "172Ultravox - Reap The Wild Wind.mp3",
+        "173Ultravox - Vienna.mp3",
+        "174Vienna.mp3",
+        "175Visage - Fade To Grey.mp3",
+        "176Visions Of Blue.mp3",
+        "177Waiting Days.mp3",
+        "178Wastelands (Extended Mix).mp3",
+        "179Wastelands.mp3",
+        "180We Came To Dance.mp3",
+        "181What's Out There.mp3",
+        "182What Would You Do.mp3",
+        "183When The Winds Blow.mp3",
+        "184When The Winds Blow (Recorded Live at Wembley Arena,23 Dec 1985).mp3",
+        "185You Move Me.mp3",
+        "186Your Religion.mp3",]
+    }
+
+    function setBoc() {
+      boc = ["001 5 Guitars",
+        "002 7 Screaming Diz-Busters",
+        "003 After Dark",
+        "004 Astronomy",
+        "005 Astronomy1",
+        "006 Baby Ice Dog",
+        "007 Beat' Em Up",
+        "008 Before The Kiss (A Redcap)",
+        "009 Before The Kiss, A Redcap",
+        "010 Black Blade",
+        "011 Blue Öyster Cult",
+        "012 Born To Be Wild",
+        "013 Buck's Boogie",
+        "014 Burnin' For You",
+        "015 Cagey Cretins",
+        "016 Career Of Evil",
+        "017 Celestial The Queen",
+        "018 Cities On Flame",
+        "019 Cities On Flame With Rock And Roll",
+        "020 Cold Gray Light Of Dawn",
+        "021 Damaged",
+        "022 Dance On Stilts",
+        "023 Dancin' In The Ruins",
+        "024 Deadline",
+        "025 Death Valley Nights",
+        "026 Debbie Denise",
+        "027 Del Rio's Song",
+        "028 Divine Wind",
+        "029 Dominance And Submission",
+        "030 (Don't Fear) The Reaper",
+        "031 Don't Fear The Reaper",
+        "032 Don't Turn Your Back",
+        "033 Dragon Lady",
+        "034 Dr Music",
+        "035 Dr. Music",
+        "036 E.T.I. (Extra Terrestrial Intelligence)",
+        "037 Eye Of The Hurricane",
+        "038 Eyes On Fire",
+        "039 Fallen Angel",
+        "040 Feel The Thunder",
+        "041 Fire Of Unknown Origin",
+        "042 Fireworks",
+        "043 Flaming Telepaths",
+        "044 Godzilla",
+        "045 Goin' Through The Motions",
+        "046 Golden Age Of Leather",
+        "047 Good To Feel Hungry",
+        "048 Hammer Back",
+        "049 Harvester Of Eyes",
+        "050 Harvester Of Eyes",
+        "051 Harvest Moon",
+        "052 Heavy Metal _ The Black And Silver",
+        "053 Here Comes That Feeling",
+        "054 Hot Rails To Hell",
+        "055 Hungry Boys",
+        "056 I Am The One You Warned Me Of",
+        "057 I Am The Storm",
+        "058 I Just Like To Be Bad",
+        "059 I Love The Night",
+        "060 Imaginos",
+        "061 I'm On The Lamb But I Ain't No Sheep",
+        "062 In Thee",
+        "063 In The Presence Of Another World",
+        "064 Joan Crawford",
+        "065 Kick Out The Jams",
+        "066 Last Days Of May",
+        "067 Les Invisibles",
+        "068 Let Go",
+        "069 Light Years Of Love",
+        "070 Lips In The Hill",
+        "071 Lips In The Hills",
+        "072 Live For Me",
+        "073 Lonely Teardrops",
+        "074 Madness To The Method",
+        "075 Magna Of Illusion",
+        "076 Maserati GT (I Ain't Got You)",
+        "077 ME 262",
+        "078 ME 262",
+        "079 Mirrors",
+        "080 Mistress Of The Salmon Salt (Quicklime Girl)",
+        "081 Monster",
+        "082 Moon Crazy",
+        "083 Morning Final",
+        "084 Nosferatu",
+        "085 O.D.'d On Life Itself",
+        "086 One Step Ahead Of The Devil",
+        "087 Out Of The Darkness",
+        "088 Perfect Water",
+        "089 Pocket",
+        "090 Power Underneath Dispair",
+        "091 Quicklime Girl",
+        "092 Real World",
+        "093 Redeemed",
+        "094 Revenge Of Vera Gemini",
+        "095 Roadhouse Blues",
+        "096 Rock Not War",
+        "097 R. U. Ready 2 Rock",
+        "098 R.U. Ready 2 Rock",
+        "099 Screams",
+        "100 Searchin' For Celine",
+        "101 See You In Black",
+        "102 Seven Screaming Dizbusters",
+        "103 Shadow Of California",
+        "104 Shadow Warrior",
+        "105 She's As Beautiful As A Foot",
+        "106 Shooting Shark",
+        "107 Showtime",
+        "108 Sinful Love",
+        "109 Sole Survivor",
+        "110 Spy In The House Of The Night",
+        "111 Stairway To The Stars",
+        "112 Still Burnin'",
+        "113 Stone Of Love",
+        "114 Subhuman",
+        "115 Take Me Away",
+        "116 Tattoo Vampire",
+        "117 Teen Archer",
+        "118 Tenderloin",
+        "119 The Great Sun Jester",
+        "120 The Marshall Plan",
+        "121 Then Came The Last Days Of May",
+        "122 The Old Gods Return",
+        "123 The Red And The Black",
+        "124 The Siege And Investiture Of Baron Von Frankenstein's Castle At Weisseria",
+        "125 The Subhuman",
+        "126 The Vigil",
+        "127 (This Ain't The) Summer Of Love",
+        "128 This Ain't The Summer Of Love",
+        "129 Transmaniacon MC",
+        "130 True Confessions",
+        "131 Unknown Tongue",
+        "132 Veins",
+        "133 Vengeance (The Pact)",
+        "134 Veteran Of Psychic Wars",
+        "135 Veteran Of The Psychic Wars",
+        "136 We Gotta Get Out Of This Place",
+        "137 When The War Comes",
+        "138 White Flags",
+        "139 Wings Wetted Down",
+        "140 Workshop Of The Telescopes",
+        "141 X-Ray Eyes",
+        "142 You're Not The One (I Was Looking For)",
+      ]
+    }
+
+    function setPlaylist() {
+      songList = ["0001_After You've Gone.mp3",
+        "0002_Air Supply - All Out Of Love.mp3",
+        "0003_Air Supply - Making Love (Out Of Nothing At All).mp3",
+        "0004_Albert Hammond - The Free Electric Band.mp3",
+        "0005_Alice Cooper - I Like Girls.mp3",
+        "0006_Alice Cooper - No More Mr. Nice Guy.mp3",
+        "0007_Alice Cooper - School's Out.mp3",
+        "0008_Alice In Wonderland.mp3",
+        "0009_A Little Good News.mp3",
+        "0010_Al Jarreau - We're In This Love Together.mp3",
+        "0011_All Of Me.mp3",
+        "0012_A Love Song.mp3",
+        "0013_Al Stewart - Year of the Cat.mp3",
+        "0014_America - A Horse with No Name.mp3",
+        "0015_America - Sister Golden Hair.mp3",
+        "0016_America - Ventura Highway.mp3",
+        "0017_Anastacia - Left Outside Alone.mp3",
+        "0018_Andrew Gold - Lonely Boy.mp3",
+        "0019_Another Sleepless Night.mp3",
+        "0020_Aretha Franklin - Bridge Over Troubled Water.mp3",
+        "0021_Aretha Franklin - Day Dreaming (Single Version).mp3",
+        "0022_Aretha Franklin - Rock Steady.mp3",
+        "0023_Argent - God Gave Rock and Roll to You.mp3",
+        "0024_Armondo's Rhumba.mp3",
+        "0025_As Time Goes By.mp3",
+        "0026_Avril Lavigne - Complicated.mp3",
+        "0027_Aztec Camera - How Men Are.mp3",
+        "0028_Bachman-Turner Overdrive - You Ain't Seen Nothing Yet.mp3",
+        "0029_Bad Company - Can't Get Enough (2009 Remaster).mp3",
+        "0030_Bad Company - Feel Like Makin' Love.mp3",
+        "0031_Belinda Carlisle - Heaven Is A Place On Earth.mp3",
+        "0032_Belinda Carlisle - Leave A Light On.mp3",
+        "0033_Belle Epoque - Mister-Do-Right.mp3",
+        "0034_Bette Midler - Do You Want to Dance.mp3",
+        "0035_Betty Wright - Clean up Woman.mp3",
+        "0036_Beverley Craven - Promise Me.mp3",
+        "0037_Bill Wyman - A Quarter To Three.mp3",
+        "0038_Bill Wyman - Get It On.mp3",
+        "0039_Bill Wyman - Ride On Baby.mp3",
+        "0040_Blackfoot - Train, Train.mp3",
+        "0041_BLOODSTONE - Natural High.mp3",
+        "0042_Blue Magic - Sideshow.mp3",
+        "0043_Blue Öyster Cult - (Don't Fear) The Reaper.mp3",
+        "0044_Blues Image - Ride Captain Ride (Single Version).mp3",
+        "0045_Blues Monk.mp3",
+        "0046_Bob Seger & The Silver Bullet Band - Old Time Rock & Roll.mp3",
+        "0047_Bonnie Tyler - Have You Ever Seen The Rain.mp3",
+        "0048_Bonnie Tyler - Holding Out For A Hero.mp3",
+        "0049_Bonnie Tyler - Total Eclipse Of The Heart.mp3",
+        "0050_Boz Scaggs - Lido Shuffle.mp3",
+        "0051_Bread - Baby I'm-A Want You.mp3",
+        "0052_Bread - Everything I Own.mp3",
+        "0053_Bread - Make It with You.mp3",
+        "0054_Brilliant - It's a Man's Man's Man's World.mp3",
+        "0055_Broken Hearted Me.mp3",
+        "0056_Brook Benton - Rainy Night In Georgia.mp3",
+        "0057_Brownsville Station - Smokin' In the Boy's Room.mp3",
+        "0058_Bruce Hornsby & The Range - Mandolin Rain.mp3",
+        "0059_Bruce Hornsby & The Range - The Way It Is.mp3",
+        "0060_Candi Staton - Young Hearts Run Free.mp3",
+        "0061_Canned Heat - Let's Work Together.mp3",
+        "0062_Carly Simon - You're So Vain.mp3",
+        "0063_Carole Bayer Sager - You're Moving Out Today.mp3",
+        "0064_Chaka Khan - I'm Every Woman.mp3",
+        "0065_Charles Wright & The Watts 103rd. Street Rhythm Band - Express Yourself.mp3",
+        "0066_Cheap Trick - I'll Be With You Tonight.mp3",
+        "0067_Cheap Trick - Mighty Wings (From ''Top Gun'' Original Sondtrack).mp3",
+        "0068_Cheap Trick - The Flame.mp3",
+        "0069_Cheap Trick - The House Is Rockin' (With Domestic Pr...).mp3",
+        "0070_Chicago - If You Leave Me Now.mp3",
+        "0071_Chicago - Saturday In the Park.mp3",
+        "0072_Chic - Good Times.mp3",
+        "0073_Chicken Shack - I'd Rather Go Blind.mp3",
+        "0074_Chic - Le Freak.mp3",
+        "0075_Chilly - We Are The Popkings.mp3",
+        "0076_Chris Rea - Fool (If You Think It's Over).mp3",
+        "0077_Christina Aguilera - The Voice Within.mp3",
+        "0078_Christopher Cross - No Time for Talk.mp3",
+        "0079_Christopher Cross - Ride Like the Wind.mp3",
+        "0080_City Boy - 5.7.0.5.mp3",
+        "0081_Clarence Carter - Patches.mp3",
+        "0082_Cliff Richard - Devil Woman.mp3",
+        "0083_Cliff Richard - We Don't Talk Anymore.mp3",
+        "0084_Climax Blues Band - Couldn't Get It Right.mp3",
+        "0085_Climie Fisher - Fire On the Ocean.mp3",
+        "0086_Cock Robin - The Promise You Made.mp3",
+        "0087_Could I Have This Dance.mp3",
+        "0088_Creedence Clearwater Revival - My Baby Left Me.mp3",
+        "0089_Crosby, Stills & Nash - Dark Star.mp3",
+        "0090_Crosby, Stills & Nash - Just a Song Before I Go.mp3",
+        "0091_Curtis Mayfield - Move On Up.mp3",
+        "0092_Cyndi Lauper - I Drove All Night.mp3",
+        "0093_Cyndi Lauper - True Colors.mp3",
+        "0094_Daniel Merriweather - Red.mp3",
+        "0095_Danny's Song.mp3",
+        "0096_Daryl Hall & John Oates - Out Of Touch.mp3",
+        "0097_Daryl Hall & John Oates - Private Eyes.mp3",
+        "0098_Daryl Hall & John Oates - She's Gone.mp3",
+        "0099_Daughtry - What About Now.mp3",
+        "0100_David Bowie & Mick Jagger - Dancing In The Street.mp3",
+        "0101_David Gates - Goodbye Girl.mp3",
+        "0102_Daydream Believer.mp3",
+        "0103_Deacon Blue - Dignity.mp3",
+        "0104_Deacon Blue - When Will You (Make My Telephone Ring).mp3",
+        "0105_Dee C. Lee - See The Day.mp3",
+        "0106_Deep Purple - Black Night (1995 Remaster).mp3",
+        "0107_Delaney & Bonnie - Never Ending Song of Love.mp3",
+        "0108_Dionne Warwick - I'll Never Fall In Love Again.mp3",
+        "0109_Dionne Warwick - Then Came You.mp3",
+        "0110_DJ Sammy & Yanou Feat. Do - Heaven (Candlelight Mix).mp3",
+        "0111_Donny Hathaway - Jealous Guy (Studio Version).mp3",
+        "0112_Don't Get Around Much Anymore.mp3",
+        "0113_Dream A Little Dream Of Me.mp3",
+        "0114_Dr Feelgood - Roxette.mp3",
+        "0115_Dr. Hook & Ray Sawyer - Sexy Eyes.mp3",
+        "0116_Dr. Hook - Sylvia's Mother.mp3",
+        "0117_Dr. John - Right Place Wrong Time.mp3",
+        "0118_Duran Duran - Save a Prayer.mp3",
+        "0119_Dusty Springfield - Nothing Has Been Proved.mp3",
+        "0120_Echo And The Bunnymen - Lips Like Sugar.mp3",
+        "0121_Eddie Money With Ronnie Spector - Take Me Home Tonight - Be My Baby.mp3",
+        "0122_Eddie Rabbitt - Every Which Way but Loose.mp3",
+        "0123_Ella Henderson - Ghost.mp3",
+        "0124_Elton John - Pinball Wizard.mp3",
+        "0125_Elton John - Whole Lotta Shakin' Going On.mp3",
+        "0126_Emerson, Lake & Palmer - Fanfare for the Common Man (Single Edit).mp3",
+        "0127_England Dan - I'd Really Love to See You Tonight.mp3",
+        "0128_England Dan & John Ford Coley - I'd Really Love to See You Tonight.mp3",
+        "0129_England Dan - We'll Never Have to Say Goodbye Again (Single Version).mp3",
+        "0130_Eric Carmen - All By Myself.mp3",
+        "0131_Eric Carmen - Hungry Eyes.mp3",
+        "0132_Eric Clapton - Before You Accuse Me.mp3",
+        "0133_Eric Clapton - Hound Dog.mp3",
+        "0134_Eric Clapton - Knock On Wood.mp3",
+        "0135_Eric Clapton - Lay Down Sally.mp3",
+        "0136_Europe - Carrie.mp3",
+        "0137_Faces - Ooh La La.mp3",
+        "0138_Faces - Stay with Me (2006 Remaster).mp3",
+        "0139_Fingerprints.mp3",
+        "0140_Firefall - Strange Way.mp3",
+        "0141_Firefall - You Are the Woman.mp3",
+        "0142_Fleetwood Mac - Don't Stop.mp3",
+        "0143_Fleetwood Mac - Need Your Love So Bad.mp3",
+        "0144_Focus - Hocus Pocus.mp3",
+        "0145_Foghat - Slow Ride.mp3",
+        "0146_Foreigner - Cold as Ice (2008 Remaster).mp3",
+        "0147_Foreigner - Cold as Ice.mp3",
+        "0148_Foreigner - Feels Like the First Time.mp3",
+        "0149_Foreigner - I Don't Want to Live Without You.mp3",
+        "0150_Foxy - Get Off.mp3",
+        "0151_Frankie Valli - Grease.mp3",
+        "0152_Frankie Valli & The Four Seasons - December, 1963 (Oh What a Night!).mp3",
+        "0153_F.R.David - Pick Up The Phone.mp3",
+        "0154_Free - All Right Now.mp3",
+        "0155_Gary Moore - Parisienne Walkways.mp3",
+        "0156_Gary Wright - Love Is Alive.mp3",
+        "0157_Gavin DeGraw - I Don't Want To Be.mp3",
+        "0158_George Benson - Breezin'.mp3",
+        "0159_George Benson - In Your Eyes.mp3",
+        "0160_George Benson - On Broadway (Edited Version).mp3",
+        "0161_George Harrison - All Those Years Ago.mp3",
+        "0162_George Harrison - Cockamammie Business.mp3",
+        "0163_George Harrison - Devil's Radio.mp3",
+        "0164_George McCrae - Rock Your Baby.mp3",
+        "0165_George Thorogood - I'm Wanted.mp3",
+        "0166_Gerry Rafferty - Baker Street.mp3",
+        "0167_Gerry Rafferty - Get It Right Next Time.mp3",
+        "0168_Gloria Estefan - Don't Wanna Lose You.mp3",
+        "0169_Golden Earring - Clear Night Moonlight.mp3",
+        "0170_Golden Earring - Radar Love.mp3",
+        "0171_Golden Earring - The Devil Made Me Do It.mp3",
+        "0172_Gordon Lightfoot - If You Could Read My Mind.mp3",
+        "0173_Gordon Lightfoot - Sundown.mp3",
+        "0174_H20 - Just Outside Heaven.mp3",
+        "0175_Harry Chapin - Cat's In the Cradle.mp3",
+        "0176_Harry Nilsson - Without You.mp3",
+        "0177_Hawkwind - Silver Machine.mp3",
+        "0178_Heart - Barracuda.mp3",
+        "0179_Homage.mp3",
+        "0180_Hot Chocolate - You Sexy Thing.mp3",
+        "0181_How Deep Is The Ocean-.mp3",
+        "0182_Hunting High and Low (7_ Remix).mp3",
+        "0183_Ides Of March - Vehicle (Single Version).mp3",
+        "0184_I Just Fall In Love Again.mp3",
+        "0185_I'll Be Seeing You.mp3",
+        "0186_I'm Gonna Sit Right Down And Wr.mp3",
+        "0187_It Could Happen To You.mp3",
+        "0188_I Wonder Who's Kissing Him Now.mp3",
+        "0189_Jackson Browne - Running On Empty.mp3",
+        "0190_James Arthur - Impossible.mp3",
+        "0191_James Taylor - Fire and Rain.mp3",
+        "0192_James Taylor - How Sweet It Is (To Be Loved By You).mp3",
+        "0193_Jay Ferguson - Thunder Island.mp3",
+        "0194_Jeff Buckley - Hallelujah.mp3",
+        "0195_Jefferson Starship - Count On Me.mp3",
+        "0196_Jefferson Starship - Jane.mp3",
+        "0197_Jennifer Rush - The Power Of Love.mp3",
+        "0198_Jethro Tull - Life Is a Long Song.mp3",
+        "0199_Joe Cocker - You Can Leave Your Hat On.mp3",
+        "0200_Joe Walsh - Life's Been Good.mp3",
+        "0201_John Farnham - You're The Voice.mp3",
+        "0202_John Fogerty - Headlines.mp3",
+        "0203_John Fogerty - Knockin' On Your Door.mp3",
+        "0204_John Fogerty - Soda Pop.mp3",
+        "0205_John Fogerty - The Old Man Down The Road.mp3",
+        "0206_John Lennon - Cleanup Time.mp3",
+        "0207_John Lennon - Dear Yoko.mp3",
+        "0208_John Lennon - (Just Like) Starting Over.mp3",
+        "0209_John Miles - Music.mp3",
+        "0210_John Sebastian - Welcome Back (From _Welcome Back, Kotter_).mp3",
+        "0211_John Sebastian - Welcome Back (Theme from _Welcome Back, Kotter_).mp3",
+        "0212_Jo Jo Gunne - Run Run Run (2012 Remaster).mp3",
+        "0213_Joni Mitchell - Big Yellow Taxi.mp3",
+        "0214_Joni Mitchell - Help Me.mp3",
+        "0215_Judas Priest - Take On The World.mp3",
+        "0216_Julian Lennon - Too Late For Goodbyes.mp3",
+        "0217_Just Another Woman In Love.mp3",
+        "0218_Kajagoogoo - Hang On Now.mp3",
+        "0219_Kansas - Carry on Wayward Son.mp3",
+        "0220_Kansas - Dust In The Wind.mp3",
+        "0221_Kate Bush - Wuthering Heights.mp3",
+        "0222_Kc & The Sunshine Band - Boogie Shoes.mp3",
+        "0223_Kc & The Sunshine Band - (Shake Shake Shake) Shake Your Booty.mp3",
+        "0224_Kc & The Sunshine Band - That's the Way (I Like It).mp3",
+        "0225_Kenny Loggins - Danger Zone.mp3",
+        "0226_Kenny Loggins - Playing With The Boys.mp3",
+        "0227_Kim Wilde - Kids In America.mp3",
+        "0228_KISS - I Was Made For Lovin' You.mp3",
+        "0229_Laura Branigan - Solitaire.mp3",
+        "0230_Leona Lewis - Run.mp3",
+        "0231_Limahl - Inside to Outside (7_ Version).mp3",
+        "0232_Linda Ronstadt - Desperado.mp3",
+        "0233_Linda Ronstadt - Heat Wave.mp3",
+        "0234_Linda Ronstand - It's So Easy.mp3",
+        "0235_Little Feat - Dixie Chicken.mp3",
+        "0236_Lobo - Me and You and a Dog Named Boo.mp3",
+        "0237_Lonestar - Amazed.mp3",
+        "0238_Lou Reed - Perfect Day.mp3",
+        "0239_Loverboy - Heaven In Your Eyes.mp3",
+        "0240_Lynyrd Skynyrd - Free Bird.mp3",
+        "0241_Major Harris - Love Won't Let Me Wait.mp3",
+        "0242_Manfred Mann's Earth Band - Blinded by the Light.mp3",
+        "0243_Manic Street Preachers - Little Baby Nothing.mp3",
+        "0244_Marc Jordan - Marina Del Rey.mp3",
+        "0245_Maria Muldaur - Midnight at the Oasis.mp3",
+        "0246_Mark Ronson Feat. Daniel Merriweather - Stop Me.mp3",
+        "0247_Martika - Love... Thy Will Be Done.mp3",
+        "0248_Martika - Toy Soldiers.mp3",
+        "0249_Matt Bianco - More Than I Can Bear.mp3",
+        "0250_Maxine Nightingale - Right Back Where We Started From.mp3",
+        "0251_McGuinness Flint - When I'm Dead And Gone.mp3",
+        "0252_Meat Loaf - Two Out Of Three Ain't Bad.mp3",
+        "0253_Meat Loaf - You Took The Words Right Out Of My Mouth.mp3",
+        "0254_Men At Work - Down Under.mp3",
+        "0255_Men At Work - Overkill.mp3",
+        "0256_Michael Bolton - Time, Love And Tenderness.mp3",
+        "0257_Michael Bolton - When A Man Loves A Woman.mp3",
+        "0258_Michael Franks - The Lady Wants to Know.mp3",
+        "0259_Mick Jagger - Just Another Night.mp3",
+        "0260_Mick Jagger - Lucky In Love.mp3",
+        "0261_Mick Jagger - Secrets.mp3",
+        "0262_Mick Jagger - Turn The Girl Loose.mp3",
+        "0263_Mink DeVille - Spanish Stroll.mp3",
+        "0264_Mott the Hoople - All the Young Dudes.mp3",
+        "0265_Mott The Hoople - Roll Away The Stone.mp3",
+        "0266_Mr. Mister - Broken Wings.mp3",
+        "0267_Mr. Mister - Kyrie.mp3",
+        "0268_Mud - Living Doll.mp3",
+        "0269_Mungo Jerry - Sugar Mama.mp3",
+        "0270_My Buddy.mp3",
+        "0271_My Foolish Heart.mp3",
+        "0272_Natalie Imbruglia - Shiver.mp3",
+        "0273_Natalie Imbruglia - Torn.mp3",
+        "0274_Nazareth - Gatecrash.mp3",
+        "0275_Nazareth - Love Hurts (Single Edit).mp3",
+        "0276_Nazareth - Love Leads To Madness.mp3",
+        "0277_Nick Kamen - Come Softly to Me.mp3",
+        "0278_Nicolette Larson - Lotta Love.mp3",
+        "0279_Nobody Loves Me Like You Do.mp3",
+        "0280_Now And Forever (You And Me).mp3",
+        "0281_Nu Shooz - Point of No Return.mp3",
+        "0282_Op. 11, No. 9.mp3",
+        "0283_Opus - Live Is Life.mp3",
+        "0284_Orleans - Dance with Me.mp3",
+        "0285_Over The Rainbow.mp3",
+        "0286_Pat Benatar - We Live For Love.mp3",
+        "0287_Patti Smith Group - Because The Night.mp3",
+        "0288_Paul McCartney - Live And Let Die.mp3",
+        "0289_Paul McCartney - Lucille.mp3",
+        "0290_Paul McCartney - Rough Ride.mp3",
+        "0291_Paul Young - Everything Must Change.mp3",
+        "0292_Paul Young - Love Of The Common People.mp3",
+        "0293_Peter Cetera - One Good Woman.mp3",
+        "0294_Phantom Planet - California (Tchad Blake Mix).mp3",
+        "0295_Phil Collins - You Can't Hurry Love.mp3",
+        "0296_Piano Sonata - The Moon.mp3",
+        "0297_Pilot - Magic.mp3",
+        "0298_Prefab Sprout - Cars And Girls.mp3",
+        "0299_Pretenders - Hymn to Her.mp3",
+        "0300_Primal Scream - (I'm Gonna) Cry Myself Blind.mp3",
+        "0301_Queen - Killer Queen.mp3",
+        "0302_Rainbow - Since You Been Gone.mp3",
+        "0303_Ram Jam - Black Betty.mp3",
+        "0304_Randy Crawford - Street Life (Edit).mp3",
+        "0305_Randy VanWarmer - Just When I Needed You Most.mp3",
+        "0306_Recorda-Me.mp3",
+        "0307_Red Box - Lean On Me (Ah-Li-Ayo).mp3",
+        "0308_REO Speedwagon - Keep On Loving You.mp3",
+        "0309_REO Speedwagon - Take It On The Run.mp3",
+        "0310_Republica - Ready To Go.mp3",
+        "0311_Rick Springfield - Jessie's Girl.mp3",
+        "0312_Rick Wakeman - Catherine Of Aragon.mp3",
+        "0313_Roachford - Cuddly Toy.mp3",
+        "0314_Roachford - Family Man.mp3",
+        "0315_Roberta Flack - Feel Like Makin' Love.mp3",
+        "0316_Roberta Flack - Killing Me Softly with His Song.mp3",
+        "0317_Roberta Flack - Where Is the Love.mp3",
+        "0318_Robert Palmer - Bad Case Of Loving You (Doctor, Doctor).mp3",
+        "0319_Robert Palmer - Get It On.mp3",
+        "0320_Rod Stewart - Da Ya Think I'm Sexy.mp3",
+        "0321_Rod Stewart - Every Beat of My Heart.mp3",
+        "0322_Rod Stewart - In a Broken Dream.mp3",
+        "0323_Rod Stewart - Some Guys Have All The Luck.mp3",
+        "0324_Rod Stewart - Tonight's the Night (Gonna Be Alright).mp3",
+        "0325_Roger Daltrey - Giving It All Away.mp3",
+        "0326_Roger Voudouris - Get Used to It.mp3",
+        "0327_Rory Gallagher - Bad Penny.mp3",
+        "0328_Rose Royce - Love Don't Live Here Anymore.mp3",
+        "0329_Rose Royce - Wishing On a Star (Edit).mp3",
+        "0330_Roy Orbison - Friday Night.mp3",
+        "0331_Rubber Bullets.mp3",
+        "0332_Sad Cafe - Every Day Hurts.mp3",
+        "0333_Sanford Townsend Band - Smoke from a Distant Fire.mp3",
+        "0334_Santa Esmeralda - Gloria.mp3",
+        "0335_Santana - Black Magic Woman.mp3",
+        "0336_Santana - Watch Your Step.mp3",
+        "0337_Santana - Well All Right.mp3",
+        "0338_Santana - What Does It Take (To Win Your Love).mp3",
+        "0339_Scandal Feat. Patty Smyth - The Warrior.mp3",
+        "0340_Seals and Crofts - Get Closer.mp3",
+        "0341_Shadows In The Moonlight.mp3",
+        "0342_Shakin' Stevens - A Rockin' Good Way (To Mess Around...).mp3",
+        "0343_Shakin' Stevens - Shirley.mp3",
+        "0344_Shakin' Stevens - You Drive Me Crazy.mp3",
+        "0345_Shawn Mullins - Lullaby.mp3",
+        "0346_Shirley Bassey - (Where Do I Begin) Love Story.mp3",
+        "0347_Simply Red - Ev'ry Time We Say Goodbye.mp3",
+        "0348_Sister Sledge - Gotta Get Back to Love.mp3",
+        "0349_Sister Sledge - We Are Family.mp3",
+        "0350_Slade - Cum on Feel the Noize.mp3",
+        "0351_Smile.mp3",
+        "0352_Smokie - Needles And Pins.mp3",
+        "0353_Smokie - Take Good Care Of My Baby.mp3",
+        "0354_Sniff'n'The Tears - Hungry Eyes.mp3",
+        "0355_Snowbird.mp3",
+        "0356_Someday My Prince Will Come.mp3",
+        "0357_Sophie B. Hawkins - As I Lay Me Down.mp3",
+        "0358_Spain.mp3",
+        "0359_Spandau Ballet - Fight For Ourselves.mp3",
+        "0360_Spandau Ballet - I'll Fly for You (Glide Mix).mp3",
+        "0361_Spandau Ballet - Through The Barricades.mp3",
+        "0362_Sparks - All You Ever Think About Is Sex.mp3",
+        "0363_Status Quo - Don't Stop.mp3",
+        "0364_Status Quo - Down Down.mp3",
+        "0365_Status Quo - In The Army Now.mp3",
+        "0366_Status Quo - The Party Ain't Over Yet.mp3",
+        "0367_Status Quo - The Wanderer.mp3",
+        "0368_Stealers Wheel - Stuck In The Middle With You.mp3",
+        "0369_Steve Miller Band - Abracadabra.mp3",
+        "0370_Steve Miller Band - Fly Like An Eagle.mp3",
+        "0371_Steve Miller Band - Jet Airliner.mp3",
+        "0372_Stevie Wonder - I Wish.mp3",
+        "0373_Stevie Wonder - Sir Duke.mp3",
+        "0374_Sting - If You Love Somebody Set Them Free.mp3",
+        "0375_Sting - Shadows In The Rain.mp3",
+        "0376_Stray Cats - Baby Blue Eyes.mp3",
+        "0377_Stray Cats - Cruisin'.mp3",
+        "0378_Stray Cats - I Fought The Law.mp3",
+        "0379_Stray Cats - My One Desire.mp3",
+        "0380_Stray Cats - Race With The Devil.mp3",
+        "0381_Stray Cats - Ubangi Stomp.mp3",
+        "0382_Styx - Too Much Time On My Hands.mp3",
+        "0383_Suede - Saturday Night.mp3",
+        "0384_Survivor - Burning Heart.mp3",
+        "0385_Survivor - Eye Of The Tiger.mp3",
+        "0386_Suzi Quatro - Rock And Roll Hoochie Choo.mp3",
+        "0387_Talking Heads - Psycho Killer.mp3",
+        "0388_Talking Heads - Take Me to the River.mp3",
+        "0389_Talk Talk - Give It Up.mp3",
+        "0390_Taste - What's Going On.mp3",
+        "0391_The Alan Parsons Project - Eye In The Sky.mp3",
+        "0392_The Alan Parsons Project - Games People Play.mp3",
+        "0393_The Allman Brothers Band - Jessica.mp3",
+        "0394_The Bangles - Eternal Flame.mp3",
+        "0395_The Bangles - Manic Monday.mp3",
+        "0396_The Calling - Our Lives.mp3",
+        "0397_The Calling - Wherever You Will Go.mp3",
+        "0398_The Cars - Just What I Needed.mp3",
+        "0399_The Cars - Why Can't I Have You.mp3",
+        "0400_The Doobie Brothers - Long Train Runnin'.mp3",
+        "0401_The Doobie Brothers - What a Fool Believes.mp3",
+        "0402_The Doors - Riders On the Storm.mp3",
+        "0403_The Dream Academy - Life In a Northern Town.mp3",
+        "0404_The Fray - You Found Me.mp3",
+        "0405_The Hollies - He Ain't Heavy He's My Brother.mp3",
+        "0406_The Hooters - Satellite.mp3",
+        "0407_The Jeff Healey Band - My Little Girl.mp3",
+        "0408_The Knack - My Sharona.mp3",
+        "0409_The Moody Blues - Question.mp3",
+        "0410_The Pretenders - Brass In Pocket.mp3",
+        "0411_The Rolling Stones - Break The Spell.mp3",
+        "0412_The Rolling Stones - Can't Be Seen.mp3",
+        "0413_The Rolling Stones - Harlem Shuffle.mp3",
+        "0414_The Rolling Stones - Hearts For Sale.mp3",
+        "0415_The Script - The Man Who Can't Be Moved.mp3",
+        "0416_The Sensational Alex Harvey Band - Goodnight Irene.mp3",
+        "0417_The Smiths - Last Night I Dreamt That Somebody Loved Me.mp3",
+        "0418_The Song Is You.mp3",
+        "0419_The Spinners - Could It Be I'm Falling In Love.mp3",
+        "0420_The Spinners - The Rubberband Man.mp3",
+        "0421_The Stranglers - Strange Little Girl.mp3",
+        "0422_The Tom Robinson Band - 2-4-6-8 Motorway.mp3",
+        "0423_The Trammps - Disco Inferno (Single Edit).mp3",
+        "0424_The Traveling Wilburys - Dirty World.mp3",
+        "0425_The Traveling Wilburys - End Of The Line.mp3",
+        "0426_The Traveling Wilburys - Heading For The Light.mp3",
+        "0427_The Traveling Wilburys - I'm Gone.mp3",
+        "0428_The Traveling Wilburys - Runaway.mp3",
+        "0429_The Who - Who Are You.mp3",
+        "0430_Thin Lizzy - The Boys Are Back In Town.mp3",
+        "0431_This Is New.mp3",
+        "0432_Time Don't Run Out On Me.mp3",
+        "0433_Tina Turner - In The Midnight Hour (live).mp3",
+        "0434_Tina Turner - Land Of 1,000 Dances (live).mp3",
+        "0435_Tina Turner - Private Dancer.mp3",
+        "0436_Todd Rundgren - I Saw the Light.mp3",
+        "0437_Tom Fogerty - Mystery Train.mp3",
+        "0438_Tom Robinson Band - 2-4-6-8 Motorway.mp3",
+        "0439_Tony Carey - Somewhere Down The Road.mp3",
+        "0440_Toploader - Achilles Heel.mp3",
+        "0441_Tower of Power - So Very Hard to Go.mp3",
+        "0442_Train - Drops Of Jupiter.mp3",
+        "0443_Uriah Heep - Easy Livin'.mp3",
+        "0444_Warren Zevon - Werewolves of London.mp3",
+        "0445_We'll Meet Again.mp3",
+        "0446_What'll I Do.mp3",
+        "0447_Wheatus - A Little Respect.mp3",
+        "0448_Wilson Pickett - Don't Knock My Love - Part 2 (Single Version).mp3",
+        "0449_Work.mp3",
+        "0450_Yes - Wonderous Stories (2013 Remaster).mp3",
+        "0451_You Made Me Love You.mp3",
+        "0452_You Needed Me.mp3",
+        "0453_You're My Everything.mp3",
+        "0454_You Won't See Me.mp3",
+        "0455_ZZ Top - La Grange (1999 Remaster).mp3",
+        "0456_zz Top - Tush.mp3",
+      ];
+    }
+
+    function doTime() {
+      document.getElementById('time').innerHTML = new Date().toLocaleString();
+    }
+    setInterval(doTime, 1000);
+  </script>
+</body>
+
+</html>
